@@ -1,1 +1,1 @@
-
+print("BTC BOT START")
