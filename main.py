@@ -3,25 +3,30 @@ import os, time, hmac, hashlib, base64, requests, traceback
 
 app = Flask(__name__)
 
-API_KEY = os.getenv("BITGET_API_KEY")
-SECRET_KEY = os.getenv("BITGET_SECRET_KEY")
-PASSPHRASE = os.getenv("BITGET_PASSPHRASE")
+API_KEY = os.getenv("BITGET_API_KEY", "").strip()
+SECRET_KEY = os.getenv("BITGET_SECRET_KEY", "").strip()
+PASSPHRASE = os.getenv("BITGET_PASSPHRASE", "").strip()
 
 BASE_URL = "https://api.bitget.com"
 
-def make_sign(timestamp, method, request_path, query_string="", body=""):
-    if query_string:
-        message = timestamp + method + request_path + "?" + query_string + body
-    else:
-        message = timestamp + method + request_path + body
+def get_timestamp():
+    return str(int(time.time() * 1000))
 
-    signature = hmac.new(
-        SECRET_KEY.encode("utf-8"),
-        message.encode("utf-8"),
-        hashlib.sha256
-    ).digest()
+def to_query_no_encode(params):
+    items = [(key, value) for key, value in params.items()]
+    items.sort(key=lambda x: x[0])
+    return "?" + "&".join([f"{k}={v}" for k, v in items])
 
-    return base64.b64encode(signature).decode()
+def pre_hash(timestamp, method, request_path, body):
+    return str(timestamp) + method.upper() + request_path + body
+
+def sign(message, secret_key):
+    mac = hmac.new(
+        bytes(secret_key, encoding="utf8"),
+        bytes(message, encoding="utf-8"),
+        digestmod="sha256"
+    )
+    return base64.b64encode(mac.digest()).decode()
 
 @app.route("/")
 def home():
@@ -30,22 +35,35 @@ def home():
 @app.route("/check")
 def check():
     try:
-        request_path = "/api/v2/mix/account/accounts"
-        query_string = "productType=usdt-futures"
-        timestamp = str(int(time.time() * 1000))
+        timestamp = get_timestamp()
         method = "GET"
+        body = ""
+
+        request_path = "/api/v2/mix/account/account"
+        params = {
+            "marginCoin": "USDT",
+            "symbol": "BTCUSDT"
+        }
+
+        full_request_path = request_path + to_query_no_encode(params)
+
+        signature = sign(
+            pre_hash(timestamp, method, full_request_path, body),
+            SECRET_KEY
+        )
 
         headers = {
-            "ACCESS-KEY": API_KEY.strip(),
-            "ACCESS-SIGN": make_sign(timestamp, method, request_path, query_string),
+            "ACCESS-KEY": API_KEY,
+            "ACCESS-SIGN": signature,
             "ACCESS-TIMESTAMP": timestamp,
-            "ACCESS-PASSPHRASE": PASSPHRASE.strip(),
+            "ACCESS-PASSPHRASE": PASSPHRASE,
             "Content-Type": "application/json",
             "paptrading": "1"
         }
 
-        url = BASE_URL + request_path + "?" + query_string
+        url = BASE_URL + full_request_path
         response = requests.get(url, headers=headers, timeout=10)
+
         return response.text
 
     except Exception as e:
