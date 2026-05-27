@@ -12,14 +12,6 @@ BASE_URL = "https://api.bitget.com"
 def get_timestamp():
     return str(int(time.time() * 1000))
 
-def to_query_no_encode(params):
-    items = [(key, value) for key, value in params.items()]
-    items.sort(key=lambda x: x[0])
-    return "?" + "&".join([f"{k}={v}" for k, v in items])
-
-def pre_hash(timestamp, method, request_path, body):
-    return str(timestamp) + method.upper() + request_path + body
-
 def sign(message, secret_key):
     mac = hmac.new(
         bytes(secret_key, encoding="utf8"),
@@ -27,6 +19,19 @@ def sign(message, secret_key):
         digestmod="sha256"
     )
     return base64.b64encode(mac.digest()).decode()
+
+def pre_hash(timestamp, method, request_path, body):
+    return str(timestamp) + method.upper() + request_path + body
+
+def parse_params_to_str(params):
+    items = [(key, value) for key, value in params.items()]
+    items.sort(key=lambda x: x[0])
+
+    if not items:
+        return ""
+
+    query = "?" + "&".join([str(k) + "=" + str(v) for k, v in items])
+    return query
 
 @app.route("/")
 def home():
@@ -45,12 +50,10 @@ def check():
             "symbol": "BTCUSDT"
         }
 
-        full_request_path = request_path + to_query_no_encode(params)
+        request_path_with_query = request_path + parse_params_to_str(params)
 
-        signature = sign(
-            pre_hash(timestamp, method, full_request_path, body),
-            SECRET_KEY
-        )
+        message = pre_hash(timestamp, method, request_path_with_query, body)
+        signature = sign(message, SECRET_KEY)
 
         headers = {
             "ACCESS-KEY": API_KEY,
@@ -61,7 +64,7 @@ def check():
             "paptrading": "1"
         }
 
-        url = BASE_URL + full_request_path
+        url = BASE_URL + request_path_with_query
         response = requests.get(url, headers=headers, timeout=10)
 
         return response.text
