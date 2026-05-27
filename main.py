@@ -30,16 +30,16 @@ def home():
 @app.route("/check")
 def check():
     try:
-        request_path = "/api/v2/mix/order/orders-pending"
+        request_path = "/api/v2/mix/account/accounts"
         query_string = "productType=usdt-futures"
         timestamp = str(int(time.time() * 1000))
         method = "GET"
 
         headers = {
-            "ACCESS-KEY": API_KEY,
+            "ACCESS-KEY": API_KEY.strip(),
             "ACCESS-SIGN": make_sign(timestamp, method, request_path, query_string),
             "ACCESS-TIMESTAMP": timestamp,
-            "ACCESS-PASSPHRASE": PASSPHRASE,
+            "ACCESS-PASSPHRASE": PASSPHRASE.strip(),
             "Content-Type": "application/json",
             "paptrading": "1"
         }
